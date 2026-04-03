@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>台股監控 Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #F8F7F2;
+  --navy: #004AAD;
+  --navy-light: #1a5fc4;
+  --text: #1a1a1a;
+  --text-mid: #444;
+  --text-light: #777;
+  --border: #d4d0c4;
+  --card-bg: #FFFFFF;
+  --red: #C8102E;
+  --red-bg: #fff0f2;
+  --green: #006B3C;
+  --green-bg: #f0fff6;
+  --orange: #CC5500;
+  --orange-bg: #fff5ee;
+  --yellow-bg: #fffae8;
+  --shadow: 0 2px 8px rgba(0,74,173,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+.header { background: var(--navy); color: white; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,0.2); }
+.header h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.05em; }
+.header .meta { font-size: 12px; opacity: 0.75; }
+.tabs { display: flex; background: white; border-bottom: 2px solid var(--border); overflow-x: auto; position: sticky; top: 52px; z-index: 90; box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+.tab-btn { padding: 14px 22px; background: none; border: none; border-bottom: 3px solid transparent; font-family: inherit; font-size: 14px; font-weight: 500; color: var(--text-mid); cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+.tab-btn:hover { color: var(--navy); background: rgba(0,74,173,0.04); }
+.tab-btn.active { color: var(--navy); border-bottom-color: var(--navy); font-weight: 700; }
+.content { padding: 20px; max-width: 1100px; margin: 0 auto; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+.section-title { font-size: 16px; font-weight: 700; color: var(--navy); border-left: 4px solid var(--navy); padding-left: 10px; margin: 24px 0 14px; }
+.section-title:first-child { margin-top: 4px; }
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 24px; }
+.dt-card { background: var(--card-bg); border-radius: 10px; padding: 14px 16px; box-shadow: var(--shadow); border: 1px solid var(--border); position: relative; overflow: hidden; }
+.dt-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px; }
+.dt-card.low::before { background: var(--green); }
+.dt-card.mid::before { background: var(--orange); }
+.dt-card.high::before { background: var(--red); }
+.dt-card .stock-code { font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-mid); margin-bottom: 2px; }
+.dt-card .stock-name { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.dt-card .ratio-today { font-size: 26px; font-weight: 700; font-family: 'JetBrains Mono', monospace; }
+.dt-card.low .ratio-today { color: var(--green); }
+.dt-card.mid .ratio-today { color: var(--orange); }
+.dt-card.high .ratio-today { color: var(--red); }
+.dt-card .ratio-label { font-size: 11px; color: var(--text-light); margin-top: 2px; }
+.dt-card .ratio-yesterday { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 13px; color: var(--text-mid); }
+.dt-card .ratio-yesterday span { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+.badge.low { background: var(--green-bg); color: var(--green); }
+.badge.mid { background: var(--orange-bg); color: var(--orange); }
+.badge.high { background: var(--red-bg); color: var(--red); }
+.data-table { width: 100%; border-collapse: collapse; background: var(--card-bg); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); margin-bottom: 24px; font-size: 13px; }
+.data-table th { background: var(--navy); color: white; padding: 10px 12px; text-align: left; font-weight: 600; font-size: 13px; }
+.data-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: rgba(0,74,173,0.03); }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.red { color: var(--red); }
+.green { color: var(--green); }
+.orange { color: var(--orange); }
+.conditions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; margin-bottom: 24px; }
+.condition-box { background: var(--card-bg); border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow); overflow: hidden; }
+.condition-box-header { background: var(--navy); color: white; padding: 10px 14px; font-size: 14px; font-weight: 700; display: flex; align-items: center; justify-content: space-between; }
+.condition-box-header .count { background: rgba(255,255,255,0.2); border-radius: 20px; padding: 2px 10px; font-size: 13px; }
+.condition-box-body { padding: 12px; }
+.condition-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--yellow-bg); border: 1px solid #e8d98a; border-radius: 6px; padding: 4px 10px; font-size: 13px; display: flex; align-items: center; gap: 4px; }
+.chip .chip-code { font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 12px; color: var(--navy); }
+.chip .chip-dev { font-size: 12px; }
+.chip .chip-dev.neg { color: var(--red); }
+.chart-container { background: var(--card-bg); border-radius: 10px; padding: 18px; box-shadow: var(--shadow); border: 1px solid var(--border); margin-bottom: 24px; }
+.chart-title { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+.chart-wrap { position: relative; height: 260px; }
+.signal-pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+.signal-pill.bullish { background: var(--green-bg); color: var(--green); }
+.signal-pill.bearish { background: var(--red-bg); color: var(--red); }
+.signal-pill.neutral { background: #f0f0f0; color: var(--text-mid); }
+/* ── POC + Close row ── */
+.poc-row { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+.poc-card { flex: 1; min-width: 140px; background: var(--navy); color: white; border-radius: 10px; padding: 14px 18px; box-shadow: var(--shadow); text-align: center; }
+.poc-card.close-card { background: #1a1a2e; }
+.poc-card.center-card { background: var(--navy-light); }
+.poc-card .poc-label { font-size: 12px; opacity: 0.75; margin-bottom: 4px; }
+.poc-card .poc-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; }
+.poc-card .poc-sub { font-size: 11px; opacity: 0.7; margin-top: 4px; }
+/* ── Price levels ── */
+.price-levels-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 24px; }
+.price-box { background: var(--card-bg); border-radius: 10px; padding: 14px; box-shadow: var(--shadow); border: 1px solid var(--border); }
+.price-box-title { font-size: 13px; font-weight: 700; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.dot.red { background: var(--red); }
+.dot.green { background: var(--green); }
+.price-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px dashed var(--border); font-size: 13px; }
+.price-row:last-child { border-bottom: none; }
+.price-val { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px; }
+.price-val.red { color: var(--red); }
+.price-val.green { color: var(--green); }
+.price-vol { font-size: 12px; color: var(--text-light); }
+@media(max-width:600px){
+  .content { padding: 14px; }
+  .cards-grid { grid-template-columns: 1fr 1fr; }
+  .price-levels-grid { grid-template-columns: 1fr; }
+  .poc-row { flex-direction: column; }
+  .tab-btn { padding: 12px 14px; font-size: 13px; }
+}
+.all-stocks-table td { padding: 7px 10px; font-size: 13px; }
+.all-stocks-table th { padding: 9px 10px; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1>📊 台股監控 Dashboard</h1>
+  <div class="meta" id="header-date">載入中...</div>
+</div>
+<div class="tabs">
+  <button class="tab-btn active" onclick="switchTab('dt',this)">① 當沖</button>
+  <button class="tab-btn" onclick="switchTab('ma',this)">② MA / 乖離率</button>
+  <button class="tab-btn" onclick="switchTab('compare',this)">③ 2330 比較圖</button>
+  <button class="tab-btn" onclick="switchTab('txte',this)">④ TX / TE</button>
+</div>
+<div class="content">
+
+<!-- TAB 1 -->
+<div id="tab-dt" class="tab-panel active">
+  <div class="section-title">固定 5 檔 當沖率</div>
+  <div class="cards-grid" id="dt-cards"></div>
+  <div class="section-title">今日全部個股當沖率</div>
+  <table class="data-table all-stocks-table">
+    <thead><tr><th>代號</th><th>名稱</th><th>當沖率</th><th>分級</th></tr></thead>
+    <tbody id="dt-all-body"></tbody>
+  </table>
+</div>
+
+<!-- TAB 2 -->
+<div id="tab-ma" class="tab-panel">
+  <div class="section-title">收盤價低於均線 — 條件觸發</div>
+  <div class="conditions-grid" id="ma-conditions"></div>
+  <div class="section-title">固定 5 檔 均線一覽</div>
+  <div style="overflow-x:auto">
+  <table class="data-table">
+    <thead><tr>
+      <th>股票</th><th>收盤</th>
+      <th>5日MA</th><th>5日乖離</th>
+      <th>10日MA</th><th>10日乖離</th>
+      <th>30日MA</th><th>30日乖離</th>
+      <th>60日MA</th><th>60日乖離</th>
+    </tr></thead>
+    <tbody id="ma-table-body"></tbody>
+  </table>
+  </div>
+  <div class="section-title">2330 台積電 — 5日乖離率趨勢</div>
+  <div class="chart-container">
+    <div class="chart-wrap"><canvas id="chart-deviation"></canvas></div>
+  </div>
+</div>
+
+<!-- TAB 3 -->
+<div id="tab-compare" class="tab-panel">
+  <div class="section-title">圖A：2330 vs 0050 — 近 20 日累積報酬 (%)</div>
+  <div class="chart-container">
+    <div class="chart-wrap" style="height:280px"><canvas id="chart-a"></canvas></div>
+  </div>
+  <div class="section-title">圖B：2330 & TE vs TX — 近 20 日（雙 Y 軸）</div>
+  <div class="chart-container">
+    <div class="chart-title" style="color:var(--text-mid);font-size:13px;font-weight:400">左軸：2330 / TE（元）　右軸：TX（點）</div>
+    <div class="chart-wrap" style="height:300px"><canvas id="chart-b"></canvas></div>
+  </div>
+</div>
+
+<!-- TAB 4 -->
+<div id="tab-txte" class="tab-panel">
+  <div class="section-title">TX 臺股期貨</div>
+  <div class="poc-row" id="tx-poc"></div>
+  <div class="price-levels-grid" id="tx-levels"></div>
+  <table class="data-table">
+    <thead><tr><th>券商</th><th>買方均價</th><th>賣方均價</th><th>多空訊號</th></tr></thead>
+    <tbody id="tx-broker-body"></tbody>
+  </table>
+
+  <div class="section-title">TE 電子期貨</div>
+  <div class="poc-row" id="te-poc"></div>
+  <div class="price-levels-grid" id="te-levels"></div>
+  <table class="data-table">
+    <thead><tr><th>券商</th><th>買方均價</th><th>賣方均價</th><th>多空訊號</th></tr></thead>
+    <tbody id="te-broker-body"></tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+const DATA = {"dt":{"today_date":"2026-04-02","yesterday_date":"2026-04-01","cards":[{"code":"2330","name":"台積電","today":13.2,"yesterday":10.7},{"code":"2317","name":"鴻海","today":26.7,"yesterday":20.8},{"code":"2382","name":"廣達","today":20.2,"yesterday":19.8},{"code":"3231","name":"緯創","today":34.7,"yesterday":24.9},{"code":"2308","name":"台達電","today":36.0,"yesterday":31.2}],"all_stocks":[{"code":"6442","name":"光聖","ratio":64.0,"found":true},{"code":"1519","name":"華城","ratio":51.3,"found":true},{"code":"2049","name":"上銀","ratio":42.3,"found":true},{"code":"6196","name":"帆宣","ratio":38.7,"found":true},{"code":"2308","name":"台達電","ratio":36.0,"found":true},{"code":"3231","name":"緯創","ratio":34.7,"found":true},{"code":"1503","name":"士電","ratio":34.4,"found":true},{"code":"8033","name":"雷虎","ratio":32.3,"found":true},{"code":"3017","name":"奇鋐","ratio":31.7,"found":true},{"code":"2395","name":"研華","ratio":30.1,"found":true},{"code":"1795","name":"美時","ratio":30.1,"found":true},{"code":"2404","name":"漢唐","ratio":29.6,"found":true},{"code":"6472","name":"保瑞","ratio":29.3,"found":true},{"code":"2317","name":"鴻海","ratio":26.7,"found":true},{"code":"1514","name":"亞力","ratio":25.8,"found":true},{"code":"6691","name":"洋基工程","ratio":25.7,"found":true},{"code":"2634","name":"漢翔","ratio":23.3,"found":true},{"code":"2354","name":"鴻準","ratio":22.2,"found":true},{"code":"2356","name":"英業達","ratio":22.0,"found":true},{"code":"2382","name":"廣達","ratio":20.2,"found":true},{"code":"4938","name":"和碩","ratio":19.8,"found":true},{"code":"1216","name":"統一","ratio":18.2,"found":true},{"code":"2359","name":"所羅門","ratio":17.5,"found":true},{"code":"6753","name":"龍德造船","ratio":16.6,"found":true},{"code":"2352","name":"佳世達","ratio":15.6,"found":true},{"code":"2330","name":"台積電","ratio":13.2,"found":true},{"code":"1342","name":"八貫","ratio":11.7,"found":true},{"code":"4536","name":"拓凱","ratio":7.9,"found":true}]},"ma":{"batch_date":"2026-04-02","conditions":{"5日":[{"code":"6472","name":"保瑞","close":449.0,"ma":450.2,"deviation":-0.27},{"code":"2208","name":"台船","close":20.2,"ma":20.75,"deviation":-2.65},{"code":"2354","name":"鴻準","close":51.4,"ma":51.6,"deviation":-0.39},{"code":"2359","name":"所羅門","close":107.5,"ma":110.0,"deviation":-2.27},{"code":"2634","name":"漢翔","close":46.7,"ma":47.55,"deviation":-1.79},{"code":"2404","name":"漢唐","close":829.0,"ma":840.0,"deviation":-1.31},{"code":"6691","name":"洋基工程","close":561.0,"ma":572.2,"deviation":-1.96},{"code":"2395","name":"研華","close":323.5,"ma":325.4,"deviation":-0.58},{"code":"2382","name":"廣達","close":284.5,"ma":284.7,"deviation":-0.07},{"code":"4938","name":"和碩","close":78.0,"ma":78.38,"deviation":-0.48},{"code":"3231","name":"緯創","close":125.0,"ma":125.4,"deviation":-0.32},{"code":"2308","name":"台達電","close":1430.0,"ma":1456.0,"deviation":-1.79},{"code":"2317","name":"鴻海","close":193.0,"ma":194.2,"deviation":-0.62},{"code":"1519","name":"華城","close":797.0,"ma":819.0,"deviation":-2.69},{"code":"1514","name":"亞力","close":100.5,"ma":103.8,"deviation":-3.18},{"code":"2356","name":"英業達","close":40.85,"ma":41.3,"deviation":-1.09},{"code":"6442","name":"光聖","close":2000.0,"ma":2031.0,"deviation":-1.53},{"code":"1503","name":"士電","close":179.0,"ma":182.7,"deviation":-2.03},{"code":"2049","name":"上銀","close":228.0,"ma":234.4,"deviation":-2.73},{"code":"3017","name":"奇鋐","close":2070.0,"ma":2100.0,"deviation":-1.43}],"10日":[{"code":"6472","name":"保瑞","close":449.0,"ma":456.0,"deviation":-1.54},{"code":"2208","name":"台船","close":20.2,"ma":21.05,"deviation":-4.04},{"code":"2354","name":"鴻準","close":51.4,"ma":51.9,"deviation":-0.96},{"code":"2359","name":"所羅門","close":107.5,"ma":111.75,"deviation":-3.8},{"code":"2634","name":"漢翔","close":46.7,"ma":48.67,"deviation":-4.05},{"code":"2404","name":"漢唐","close":829.0,"ma":882.8,"deviation":-6.09},{"code":"6691","name":"洋基工程","close":561.0,"ma":589.5,"deviation":-4.83},{"code":"6196","name":"帆宣","close":282.0,"ma":284.15,"deviation":-0.76},{"code":"2352","name":"佳世達","close":23.3,"ma":23.56,"deviation":-1.1},{"code":"2395","name":"研華","close":323.5,"ma":330.35,"deviation":-2.07},{"code":"2330","name":"台積電","close":1810.0,"ma":1817.0,"deviation":-0.39},{"code":"3231","name":"緯創","close":125.0,"ma":126.65,"deviation":-1.3},{"code":"2308","name":"台達電","close":1430.0,"ma":1464.5,"deviation":-2.36},{"code":"2317","name":"鴻海","close":193.0,"ma":196.55,"deviation":-1.81},{"code":"1519","name":"華城","close":797.0,"ma":860.2,"deviation":-7.35},{"code":"1514","name":"亞力","close":100.5,"ma":108.35,"deviation":-7.25},{"code":"2356","name":"英業達","close":40.85,"ma":41.94,"deviation":-2.6},{"code":"6442","name":"光聖","close":2000.0,"ma":2019.0,"deviation":-0.94},{"code":"1503","name":"士電","close":179.0,"ma":189.0,"deviation":-5.29},{"code":"2049","name":"上銀","close":228.0,"ma":231.3,"deviation":-1.43},{"code":"3017","name":"奇鋐","close":2070.0,"ma":2086.5,"deviation":-0.79}],"20日":[{"code":"6472","name":"保瑞","close":449.0,"ma":476.53,"deviation":-5.78},{"code":"2208","name":"台船","close":20.2,"ma":21.94,"deviation":-7.93},{"code":"2354","name":"鴻準","close":51.4,"ma":54.63,"deviation":-5.91},{"code":"2359","name":"所羅門","close":107.5,"ma":118.72,"deviation":-9.45},{"code":"2634","name":"漢翔","close":46.7,"ma":51.53,"deviation":-9.37},{"code":"2404","name":"漢唐","close":829.0,"ma":969.1,"deviation":-14.46},{"code":"6691","name":"洋基工程","close":561.0,"ma":613.13,"deviation":-8.5},{"code":"2352","name":"佳世達","close":23.3,"ma":24.23,"deviation":-3.84},{"code":"2395","name":"研華","close":323.5,"ma":333.83,"deviation":-3.09},{"code":"2382","name":"廣達","close":284.5,"ma":287.05,"deviation":-0.89},{"code":"2330","name":"台積電","close":1810.0,"ma":1874.17,"deviation":-3.42},{"code":"3231","name":"緯創","close":125.0,"ma":129.85,"deviation":-3.74},{"code":"2317","name":"鴻海","close":193.0,"ma":213.57,"deviation":-9.63},{"code":"1519","name":"華城","close":797.0,"ma":920.53,"deviation":-13.42},{"code":"1514","name":"亞力","close":100.5,"ma":115.5,"deviation":-12.99},{"code":"2356","name":"英業達","close":40.85,"ma":42.94,"deviation":-4.87},{"code":"1795","name":"美時","close":216.0,"ma":247.45,"deviation":-12.71},{"code":"1503","name":"士電","close":179.0,"ma":204.15,"deviation":-12.32},{"code":"2049","name":"上銀","close":228.0,"ma":233.72,"deviation":-2.45}]},"fixed5_ma":[{"code":"2330","name":"台積電","5日":{"close":1810.0,"ma":1805.0,"deviation":0.28,"direction":"↘"},"10日":{"close":1810.0,"ma":1817.0,"deviation":-0.39,"direction":"↘"},"30日":{"close":1810.0,"ma":1874.17,"deviation":-3.42,"direction":"↘"},"60日":{"close":1810.0,"ma":1796.92,"deviation":0.73,"direction":"↗"}},{"code":"2317","name":"鴻海","5日":{"close":193.0,"ma":194.2,"deviation":-0.62,"direction":"↘"},"10日":{"close":193.0,"ma":196.55,"deviation":-1.81,"direction":"↘"},"30日":{"close":193.0,"ma":213.57,"deviation":-9.63,"direction":"↘"},"60日":{"close":193.0,"ma":219.84,"deviation":-12.21,"direction":"↘"}},{"code":"2382","name":"廣達","5日":{"close":284.5,"ma":284.7,"deviation":-0.07,"direction":"↘"},"10日":{"close":284.5,"ma":284.05,"deviation":0.16,"direction":"↘"},"30日":{"close":284.5,"ma":287.05,"deviation":-0.89,"direction":"↗"},"60日":{"close":284.5,"ma":283.14,"deviation":0.48,"direction":"↗"}},{"code":"3231","name":"緯創","5日":{"close":125.0,"ma":125.4,"deviation":-0.32,"direction":"↘"},"10日":{"close":125.0,"ma":126.65,"deviation":-1.3,"direction":"↘"},"30日":{"close":125.0,"ma":129.85,"deviation":-3.74,"direction":"↘"},"60日":{"close":125.0,"ma":135.12,"deviation":-7.49,"direction":"↘"}},{"code":"2308","name":"台達電","5日":{"close":1430.0,"ma":1456.0,"deviation":-1.79,"direction":"↘"},"10日":{"close":1430.0,"ma":1464.5,"deviation":-2.36,"direction":"↘"},"30日":{"close":1430.0,"ma":1390.17,"deviation":2.87,"direction":"↗"},"60日":{"close":1430.0,"ma":1253.85,"deviation":14.05,"direction":"↗"}}]},"compare":{"dates":["2026-03-06","2026-03-09","2026-03-10","2026-03-11","2026-03-12","2026-03-13","2026-03-16","2026-03-17","2026-03-18","2026-03-19","2026-03-20","2026-03-23","2026-03-24","2026-03-25","2026-03-26","2026-03-27","2026-03-30","2026-03-31","2026-04-01","2026-04-02"],"c2330":[1890.0,1810.0,1850.0,1940.0,1885.0,1865.0,1845.0,1870.0,1905.0,1850.0,1840.0,1810.0,1810.0,1845.0,1840.0,1820.0,1780.0,1760.0,1855.0,1810.0],"c0050":[76.85,73.6,75.2,78.2,76.6,75.95,75.6,76.65,77.8,76.0,75.9,74.25,74.4,76.2,75.8,75.0,73.9,72.35,75.45,73.95],"cTX":[33704.0,31786.0,32696.0,33985.0,33530.0,33315.0,33250.0,33795.0,34551.0,33553.0,33559.0,32532.0,32771.0,33638.0,33440.0,33120.0,32468.0,31979.0,33402.0,32487.0],"cTE":[2080.85,1948.8,2021.95,2114.1,2079.25,2068.0,2059.95,2100.55,2157.35,2089.8,2087.95,2023.85,2035.3,2094.5,2077.1,2058.0,2012.0,1971.35,2074.9,2011.4],"ret2330":[0.0,-4.23,-2.12,2.65,-0.26,-1.32,-2.38,-1.06,0.79,-2.12,-2.65,-4.23,-4.23,-2.38,-2.65,-3.7,-5.82,-6.88,-1.85,-4.23],"ret0050":[0.0,-4.23,-2.15,1.76,-0.33,-1.17,-1.63,-0.26,1.24,-1.11,-1.24,-3.38,-3.19,-0.85,-1.37,-2.41,-3.84,-5.86,-1.82,-3.77],"retTX":[0.0,-5.69,-2.99,0.83,-0.52,-1.15,-1.35,0.27,2.51,-0.45,-0.43,-3.48,-2.77,-0.2,-0.78,-1.73,-3.67,-5.12,-0.9,-3.61],"retTE":[0.0,-6.35,-2.83,1.6,-0.08,-0.62,-1.0,0.95,3.68,0.43,0.34,-2.74,-2.19,0.66,-0.18,-1.1,-3.31,-5.26,-0.29,-3.34],"deviation_2330_5d":[-1.2,-3.72,-0.7,3.3,0.53,-0.27,-1.7,-0.58,1.65,-0.91,-1.18,-2.43,-1.79,0.76,0.6,-0.27,-2.14,-2.71,2.43,0.28],"close_2330":1810.0,"close_0050":73.95},"tx":{"contract_code":"TX","contract_name":"臺股期貨","trade_date":"20260402","poc":33560,"weighted_center":33241.0,"supports":[{"zone":"32600~32619","start_price":32600,"end_price":32619,"window_volume":5177,"mid_price":32609.5},{"zone":"32579~32598","start_price":32579,"end_price":32598,"window_volume":4847,"mid_price":32588.5},{"zone":"32764~32783","start_price":32764,"end_price":32783,"window_volume":3464,"mid_price":32773.5}],"resistances":[{"zone":"33555~33574","start_price":33555,"end_price":33574,"window_volume":7818,"mid_price":33564.5},{"zone":"33493~33512","start_price":33493,"end_price":33512,"window_volume":6590,"mid_price":33502.5},{"zone":"33535~33554","start_price":33535,"end_price":33554,"window_volume":6231,"mid_price":33544.5}],"brokers":[{"canonical_broker":"摩根大通","raw_names":"摩根大通","buy_presence_count":953,"buy_weighted_avg_price_proxy":33246.0,"top_buy_prices":"33560, 33550, 33570, 33580, 33400, 33555, 33510, 33650","sell_presence_count":1262,"sell_weighted_avg_price_proxy":33224.0,"top_sell_prices":"33560, 33500, 33550, 33570, 33580, 33400, 33568, 33490","signal":"bullish"},{"canonical_broker":"台灣摩根士丹利","raw_names":"摩根士丹利","buy_presence_count":247,"buy_weighted_avg_price_proxy":32787.0,"top_buy_prices":"32600, 32580, 32590, 32700, 32610, 32615, 32591, 32616","sell_presence_count":408,"sell_weighted_avg_price_proxy":32903.0,"top_sell_prices":"32600, 32620, 32800, 32580, 32590, 32700, 32610, 32615","signal":"bearish"},{"canonical_broker":"美林","raw_names":"美林證券","buy_presence_count":581,"buy_weighted_avg_price_proxy":32869.0,"top_buy_prices":"32600, 32620, 32800, 32580, 32590, 32700, 32610, 32615","sell_presence_count":659,"sell_weighted_avg_price_proxy":32948.0,"top_sell_prices":"33577, 33414, 33416, 33417, 33438, 32600, 32620, 32800","signal":"bearish"},{"canonical_broker":"元大","raw_names":"元大期貨; 元大證券","buy_presence_count":2756,"buy_weighted_avg_price_proxy":33181.0,"top_buy_prices":"33560, 33550, 33490, 33555, 33575, 33600, 33508, 33563","sell_presence_count":2238,"sell_weighted_avg_price_proxy":33206.0,"top_sell_prices":"33490, 33575, 33508, 33410, 33574, 33571, 33557, 33553","signal":"bearish"}],"close_today":32487.0},"te":{"contract_code":"TE","contract_name":"電子期貨","trade_date":"20260402","poc":2089,"weighted_center":2059.0,"supports":[{"zone":"2032.1~2033.3","start_price":2032.1,"end_price":2033.3,"window_volume":44,"mid_price":2032.6525},{"zone":"2017.15~2018.7","start_price":2017.15,"end_price":2018.7,"window_volume":39,"mid_price":2017.9875},{"zone":"2040.45~2042.05","start_price":2040.45,"end_price":2042.05,"window_volume":36,"mid_price":2041.2875}],"resistances":[{"zone":"2088.7~2091.4","start_price":2088.7,"end_price":2091.4,"window_volume":45,"mid_price":2090.12},{"zone":"2091.7~2094.15","start_price":2091.7,"end_price":2094.15,"window_volume":45,"mid_price":2093.1725},{"zone":"2079~2082.45","start_price":2079,"end_price":2082.45,"window_volume":40,"mid_price":2080.8025}],"brokers":[{"canonical_broker":"摩根大通","raw_names":"摩根大通","buy_presence_count":81,"buy_weighted_avg_price_proxy":2081.0,"top_buy_prices":"2102, 2089, 2094, 2077.6, 2078.25, 2075.5, 2077.1, 2093.6","sell_presence_count":28,"sell_weighted_avg_price_proxy":2052.0,"top_sell_prices":"2019.15, 2075.25, 2077.6, 2078.25, 2087.95, 2018.25, 2031.4, 2042.8","signal":"bullish"},{"canonical_broker":"台灣摩根士丹利","raw_names":"摩根士丹利","buy_presence_count":0,"buy_weighted_avg_price_proxy":null,"top_buy_prices":"","sell_presence_count":11,"sell_weighted_avg_price_proxy":2019.0,"top_sell_prices":"2017.2, 2019.85, 2017.3, 2018.7, 2019.95, 2026.1, 2017.1, 2020","signal":"neutral"},{"canonical_broker":"美林","raw_names":"美林證券","buy_presence_count":7,"buy_weighted_avg_price_proxy":2033.0,"top_buy_prices":"2017.3, 2018.05, 2019.7, 2087.5, 2027.05, 2047.75, 2056.3","sell_presence_count":15,"sell_weighted_avg_price_proxy":2042.0,"top_sell_prices":"2032.65, 2033.75, 2021.45, 2025.5, 2028.95, 2031.1, 2034.15, 2035.9","signal":"bearish"},{"canonical_broker":"元大","raw_names":"元大期貨; 元大證券","buy_presence_count":205,"buy_weighted_avg_price_proxy":2057.0,"top_buy_prices":"2083.2, 2077.1, 2093.75, 2102, 2017.2, 2089, 2091, 2091.95","sell_presence_count":261,"sell_weighted_avg_price_proxy":2057.0,"top_sell_prices":"2077.6, 2085.9, 2086.85, 2083.5, 2083.8, 2085.75, 2087, 2017.2","signal":"bullish"}],"close_today":2011.4}};
+
+function switchTab(id, btn) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'compare' && !window._compareRendered) { renderCompare(); window._compareRendered=true; }
+  if (id === 'ma' && !window._maRendered) { renderMAChart(); window._maRendered=true; }
+}
+
+function tier(r) {
+  if (r===null||r===undefined) return 'mid';
+  if (r<20) return 'low'; if (r<=45) return 'mid'; return 'high';
+}
+function tierLabel(r) {
+  if (r===null) return '—';
+  if (r<20) return '<20%'; if (r<=45) return '20~45%'; return '>45%';
+}
+
+// TAB 1
+function renderDT() {
+  const d = DATA.dt;
+  document.getElementById('header-date').textContent = `資料日期：${d.today_date}`;
+  const grid = document.getElementById('dt-cards');
+  d.cards.forEach(c => {
+    const t = tier(c.today);
+    const div = document.createElement('div');
+    div.className = `dt-card ${t}`;
+    div.innerHTML = `<div class="stock-code">${c.code}</div><div class="stock-name">${c.name}</div>
+      <div class="ratio-today mono">${c.today!==null?c.today+'%':'—'}</div>
+      <div class="ratio-label">今日當沖率</div>
+      <div class="ratio-yesterday">昨日：<span>${c.yesterday!==null?c.yesterday+'%':'—'}</span></div>`;
+    grid.appendChild(div);
+  });
+  const tbody = document.getElementById('dt-all-body');
+  d.all_stocks.forEach(s => {
+    const t = tier(s.ratio);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono" style="color:var(--navy);font-weight:600">${s.code}</td>
+      <td>${s.name}</td>
+      <td class="mono" style="font-weight:700">${s.ratio}%</td>
+      <td><span class="badge ${t}">${tierLabel(s.ratio)}</span></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+// TAB 2
+function renderMA() {
+  const d = DATA.ma;
+  const labels = {'5日':'收盤 < 5日MA','10日':'收盤 < 10日MA','20日':'收盤 < 30日MA'};
+  const container = document.getElementById('ma-conditions');
+  ['5日','10日','20日'].forEach(k => {
+    const items = d.conditions[k]||[];
+    const box = document.createElement('div');
+    box.className='condition-box';
+    const chips = items.map(item=>{
+      const dc=item.deviation<0?'neg':'';
+      return `<div class="chip"><span class="chip-code">${item.code}</span>${item.name}<span class="chip-dev ${dc}">${item.deviation}%</span></div>`;
+    }).join('');
+    box.innerHTML=`<div class="condition-box-header">${labels[k]}<span class="count">${items.length}檔</span></div>
+      <div class="condition-box-body"><div class="condition-chips">${chips||'<span style="color:var(--text-light);font-size:13px">無觸發</span>'}</div></div>`;
+    container.appendChild(box);
+  });
+  const tbody = document.getElementById('ma-table-body');
+  d.fixed5_ma.forEach(row=>{
+    const r5=row['5日']||{}, r10=row['10日']||{}, r30=row['30日']||{}, r60=row['60日']||{};
+    function devCell(obj){
+      if(!obj||obj.deviation===undefined)return'<td>—</td>';
+      const cls=obj.deviation<0?'red':'green';
+      return`<td class="mono ${cls}" style="font-weight:600">${obj.deviation>0?'+':''}${obj.deviation}% ${obj.direction||''}</td>`;
+    }
+    function maCell(obj){
+      if(!obj||!obj.ma)return'<td>—</td>';
+      return`<td class="mono">${obj.ma}</td>`;
+    }
+    const close=r5.close||r10.close||'—';
+    const belowAny=r5.deviation<0||r10.deviation<0||r30.deviation<0;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td><span style="font-weight:700;color:var(--navy)">${row.code}</span> ${row.name}</td>
+      <td class="mono" style="font-weight:700${belowAny?';color:var(--red)':''}">${close}</td>
+      ${maCell(r5)}${devCell(r5)}${maCell(r10)}${devCell(r10)}${maCell(r30)}${devCell(r30)}${maCell(r60)}${devCell(r60)}`;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderMAChart() {
+  const c = DATA.compare;
+  const dates = c.dates.map(d=>d.slice(5));
+  const devs = c.deviation_2330_5d;
+  const ctx = document.getElementById('chart-deviation').getContext('2d');
+  new Chart(ctx, {
+    type:'bar',
+    data:{labels:dates,datasets:[{
+      label:'5日乖離率(%)',data:devs,
+      backgroundColor:devs.map(v=>v===null?'transparent':v>=0?'rgba(0,107,60,0.75)':'rgba(200,16,46,0.75)'),
+      borderRadius:3
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y!==null?c.parsed.y+'%':'無資料'}}},
+      scales:{x:{ticks:{font:{size:11},maxRotation:45}},y:{grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{size:11},callback:v=>v+'%'}}}}
+  });
+}
+
+// TAB 3
+function renderCompare() {
+  const c = DATA.compare;
+  const dates = c.dates.map(d=>d.slice(5));
+
+  // Chart A
+  const ctxA = document.getElementById('chart-a').getContext('2d');
+  new Chart(ctxA,{type:'line',data:{labels:dates,datasets:[
+    {label:'2330 台積電',data:c.ret2330,borderColor:'#004AAD',backgroundColor:'rgba(0,74,173,0.08)',fill:true,tension:0.3,pointRadius:3,borderWidth:2},
+    {label:'0050 元大台灣50',data:c.ret0050,borderColor:'#CC5500',backgroundColor:'transparent',fill:false,tension:0.3,pointRadius:3,borderWidth:2,borderDash:[5,3]}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{position:'top',labels:{font:{size:13}}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.parsed.y!==null?c.parsed.y.toFixed(2)+'%':'—')}}},
+    scales:{
+      x:{ticks:{font:{size:11},maxRotation:45}},
+      y:{grid:{color:'rgba(0,0,0,0.05)'},ticks:{font:{size:11},callback:v=>v.toFixed(1)+'%'}}
+    }}
+  });
+
+  // Chart B: 2330 & TE → left Y;  TX → right Y
+  const ctxB = document.getElementById('chart-b').getContext('2d');
+  new Chart(ctxB,{type:'line',data:{labels:dates,datasets:[
+    {label:'2330 台積電',data:c.c2330,borderColor:'#004AAD',backgroundColor:'transparent',tension:0.3,pointRadius:3,borderWidth:2,yAxisID:'y'},
+    {label:'TE 電子期貨',data:c.cTE,borderColor:'#006B3C',backgroundColor:'transparent',tension:0.3,pointRadius:3,borderWidth:2,borderDash:[5,3],yAxisID:'y'},
+    {label:'TX 臺股期貨',data:c.cTX,borderColor:'#C8102E',backgroundColor:'transparent',tension:0.3,pointRadius:3,borderWidth:2,yAxisID:'y1'}
+  ]},
+  options:{
+    responsive:true,maintainAspectRatio:false,
+    interaction:{mode:'index',intersect:false},
+    plugins:{legend:{position:'top',labels:{font:{size:13}}}},
+    scales:{
+      x:{ticks:{font:{size:11},maxRotation:45}},
+      y:{type:'linear',position:'left',
+        title:{display:true,text:'2330 / TE（元）',font:{size:12},color:'#004AAD'},
+        ticks:{font:{size:11},color:'#004AAD'},
+        grid:{color:'rgba(0,74,173,0.06)'}},
+      y1:{type:'linear',position:'right',
+        title:{display:true,text:'TX（點）',font:{size:12},color:'#C8102E'},
+        ticks:{font:{size:11},color:'#C8102E'},
+        grid:{drawOnChartArea:false}}
+    }}
+  });
+}
+
+// TAB 4
+function renderTXTE() {
+  [['tx',DATA.tx],['te',DATA.te]].forEach(([prefix,d])=>{
+    // POC + close row
+    const pocRow = document.getElementById(`${prefix}-poc`);
+    pocRow.innerHTML=`
+      <div class="poc-card close-card">
+        <div class="poc-label">今日收盤</div>
+        <div class="poc-value">${d.close_today!==undefined?d.close_today.toLocaleString():'—'}</div>
+        <div class="poc-sub">${d.contract_name} ${d.trade_date}</div>
+      </div>
+      <div class="poc-card">
+        <div class="poc-label">最大量價位 (POC)</div>
+        <div class="poc-value">${d.poc.toLocaleString()}</div>
+        <div class="poc-sub">成交量最集中</div>
+      </div>
+      <div class="poc-card center-card">
+        <div class="poc-label">加權中心價</div>
+        <div class="poc-value">${d.weighted_center.toLocaleString()}</div>
+        <div class="poc-sub">全日量加權</div>
+      </div>`;
+
+    // Levels
+    const levelsGrid = document.getElementById(`${prefix}-levels`);
+    levelsGrid.innerHTML=`
+      <div class="price-box">
+        <div class="price-box-title"><span class="dot red"></span> 壓力區（前 3 大）</div>
+        ${d.resistances.map((r,i)=>`
+          <div class="price-row">
+            <span><span style="color:var(--text-light);font-size:12px">R${i+1}</span>&nbsp;${r.zone}</span>
+            <div style="text-align:right">
+              <div class="price-val red">${r.mid_price.toLocaleString()}</div>
+              <div class="price-vol">量 ${r.window_volume.toLocaleString()}</div>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div class="price-box">
+        <div class="price-box-title"><span class="dot green"></span> 支撐區（前 3 大）</div>
+        ${d.supports.map((s,i)=>`
+          <div class="price-row">
+            <span><span style="color:var(--text-light);font-size:12px">S${i+1}</span>&nbsp;${s.zone}</span>
+            <div style="text-align:right">
+              <div class="price-val green">${s.mid_price.toLocaleString()}</div>
+              <div class="price-vol">量 ${s.window_volume.toLocaleString()}</div>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    // Broker table
+    const tbody = document.getElementById(`${prefix}-broker-body`);
+    tbody.innerHTML='';
+    d.brokers.forEach(b=>{
+      const sig = b.signal==='bullish'?'偏多 ▲':b.signal==='bearish'?'偏空 ▼':'中性';
+      const tr=document.createElement('tr');
+      tr.innerHTML=`<td style="font-weight:600">${b.canonical_broker}</td>
+        <td class="mono">${b.buy_weighted_avg_price_proxy?b.buy_weighted_avg_price_proxy.toLocaleString():'—'}</td>
+        <td class="mono">${b.sell_weighted_avg_price_proxy?b.sell_weighted_avg_price_proxy.toLocaleString():'—'}</td>
+        <td><span class="signal-pill ${b.signal}">${sig}</span></td>`;
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+// INIT
+renderDT();
+renderMA();
+renderTXTE();
+</script>
+</body>
+</html>
