@@ -1,6 +1,13 @@
 # my-stock-dashboard
 my-stock-dashboard (Desktop push to GitHub)
 
+### 記得是在桌機跑: 
+step 1. 跑 4 支桌機 Python 程式，產出最新 JSON
+step 2. 執行更新腳本：
+        python update_dashboard.py
+step 3. 腳本自動 git push，手機打開網址即可查看
+
+==========================================
 台股個人監控 Dashboard — GitHub Pages 靜態網頁版
 
 **Live URL：**
